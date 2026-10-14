@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WebSocket Security Scanner</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --ink: #18202b;
+        --muted: #5d6877;
+        --line: #d9dee7;
+        --soft: #eef2f6;
+        --accent: #007c89;
+        --accent-strong: #005f69;
+        --pass: #197a45;
+        --fail: #b42318;
+        --warning: #a15c00;
+        --info: #3b5b86;
+        --error: #5b2a86;
+        --shadow: 0 12px 28px rgba(24, 32, 43, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .mark {
+        width: 40px;
+        height: 40px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #b8dce0;
+        background: #e4f7f8;
+        color: var(--accent-strong);
+        border-radius: 8px;
+        font-weight: 800;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 22px;
+        letter-spacing: 0;
+      }
+
+      .subtle {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .tool {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        padding: 18px;
+        margin-bottom: 18px;
+      }
+
+      form {
+        display: grid;
+        gap: 14px;
+      }
+
+      label {
+        display: block;
+        color: #2b3645;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 7px;
+      }
+
+      .target-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+      }
+
+      input[type="url"],
+      input[type="number"] {
+        width: 100%;
+        min-height: 46px;
+        border: 1px solid #c8d0dc;
+        border-radius: 8px;
+        background: #ffffff;
+        color: var(--ink);
+        padding: 0 13px;
+        outline: none;
+      }
+
+      input[type="url"]:focus,
+      input[type="number"]:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(0, 124, 137, 0.14);
+      }
+
+      button {
+        min-height: 46px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        font-weight: 800;
+        padding: 0 18px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: var(--accent-strong);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        background: #8aa5a9;
+      }
+
+      .options {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .check,
+      .number {
+        min-height: 46px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+        padding: 12px;
+      }
+
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .check input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+        flex: 0 0 auto;
+      }
+
+      .check span,
+      .number span {
+        color: #334155;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .number {
+        display: grid;
+        grid-template-columns: 1fr 86px;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .number input {
+        min-height: 36px;
+        padding: 0 9px;
+      }
+
+      .status-line {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        min-height: 40px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .status-line.active {
+        display: flex;
+      }
+
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border: 3px solid #c8d0dc;
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .summary {
+        display: none;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin: 16px 0;
+      }
+
+      .summary.active {
+        display: grid;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 12px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 24px;
+        line-height: 1;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .results {
+        display: grid;
+        gap: 10px;
+      }
+
+      .result {
+        border: 1px solid var(--line);
+        border-left-width: 5px;
+        border-radius: 8px;
+        background: var(--panel);
+        overflow: hidden;
+      }
+
+      .result.pass {
+        border-left-color: var(--pass);
+      }
+
+      .result.fail {
+        border-left-color: var(--fail);
+      }
+
+      .result.warning {
+        border-left-color: var(--warning);
+      }
+
+      .result.info {
+        border-left-color: var(--info);
+      }
+
+      .result.error {
+        border-left-color: var(--error);
+      }
+
+      .result-head {
+        width: 100%;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 12px;
+        align-items: center;
+        padding: 13px 14px;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        border: 0;
+        cursor: pointer;
+      }
+
+      .result-head:hover {
+        background: #f8fafc;
+      }
+
+      .badge {
+        min-width: 78px;
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 8px;
+        padding: 5px 8px;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .badge.pass {
+        background: #e6f4ec;
+        color: var(--pass);
+      }
+
+      .badge.fail {
+        background: #fdecea;
+        color: var(--fail);
+      }
+
+      .badge.warning {
+        background: #fff4df;
+        color: var(--warning);
+      }
+
+      .badge.info {
+        background: #edf4ff;
+        color: var(--info);
+      }
+
+      .badge.error {
+        background: #f2ecfb;
+        color: var(--error);
+      }
+
+      .result-title {
+        min-width: 0;
+      }
+
+      .result-title strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .result-title span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+
+      .severity {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .result-body {
+        display: none;
+        border-top: 1px solid var(--line);
+        padding: 14px;
+      }
+
+      .result.open .result-body {
+        display: block;
+      }
+
+      .summary-text {
+        margin: 0 0 12px;
+        color: #334155;
+        line-height: 1.45;
+      }
+
+      ul {
+        margin: 8px 0 0;
+        padding-left: 18px;
+        color: #39475a;
+      }
+
+      li {
+        margin: 5px 0;
+        overflow-wrap: anywhere;
+      }
+
+      .remediation {
+        margin-top: 12px;
+        padding: 11px;
+        border-radius: 8px;
+        background: #f3f6f9;
+        color: #334155;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .excluded {
+        display: none;
+        margin-top: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 14px;
+      }
+
+      .excluded.active {
+        display: block;
+      }
+
+      .excluded h2 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+
+      .message {
+        display: none;
+        border-radius: 8px;
+        padding: 12px;
+        background: #fdecea;
+        color: var(--fail);
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+
+      .message.active {
+        display: block;
+      }
+
+      @media (max-width: 760px) {
+        .shell {
+          width: min(100% - 20px, 1120px);
+          padding-top: 18px;
+        }
+
+        header,
+        .target-row,
+        .options,
+        .summary {
+          grid-template-columns: 1fr;
+        }
+
+        header {
+          align-items: flex-start;
+        }
+
+        .pill {
+          align-self: flex-start;
+        }
+
+        .result-head {
+          grid-template-columns: 1fr;
+        }
+
+        .badge {
+          width: fit-content;
+        }
+
+        .severity {
+          white-space: normal;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <div class="brand">
+          <div class="mark">WS</div>
+          <div>
+            <h1>WebSocket Security Scanner</h1>
+            <p class="subtle">Local checks for generic WebSocket misconfigurations.</p>
+          </div>
+        </div>
+        <span class="pill">Runs from your machine</span>
+      </header>
+
+      <section class="tool">
+        <div id="message" class="message"></div>
+        <form id="scanForm">
+          <div>
+            <label for="targetUrl">Target WebSocket URL</label>
+            <div class="target-row">
+              <input id="targetUrl" name="targetUrl" type="url" placeholder="wss://example.com/socket" required />
+              <button id="scanButton" type="submit">Start Scan</button>
+            </div>
+          </div>
+
+          <div class="options">
+            <label class="check">
+              <input id="authorized" type="checkbox" required />
+              <span>I am authorized to test this endpoint</span>
+            </label>
+            <label class="check">
+              <input id="verifyTls" type="checkbox" checked />
+              <span>Verify TLS certificate</span>
+            </label>
+            <label class="number">
+              <span>Idle test seconds</span>
+              <input id="idleSeconds" type="number" min="5" max="30" value="10" />
+            </label>
+          </div>
+        </form>
+      </section>
+
+      <div id="statusLine" class="status-line">
+        <div class="spinner"></div>
+        <span>Scanning target. This can take about a minute.</span>
+      </div>
+
+      <section id="summary" class="summary"></section>
+      <section id="results" class="results"></section>
+      <section id="excluded" class="excluded"></section>
+    </div>
+
+    <script>
+      const form = document.getElementById("scanForm");
+      const button = document.getElementById("scanButton");
+      const targetUrl = document.getElementById("targetUrl");
+      const authorized = document.getElementById("authorized");
+      const verifyTls = document.getElementById("verifyTls");
+      const idleSeconds = document.getElementById("idleSeconds");
+      const statusLine = document.getElementById("statusLine");
+      const results = document.getElementById("results");
+      const summary = document.getElementById("summary");
+      const excluded = document.getElementById("excluded");
+      const message = document.getElementById("message");
+
+      const labels = {
+        pass: "Pass",
+        fail: "Fail",
+        warning: "Warn",
+        info: "Info",
+        error: "Error"
+      };
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        clearMessage();
+        results.innerHTML = "";
+        summary.innerHTML = "";
+        excluded.innerHTML = "";
+        summary.classList.remove("active");
+        excluded.classList.remove("active");
+
+        const url = targetUrl.value.trim();
+        if (!url.startsWith("wss://") && !url.startsWith("ws://")) {
+          showMessage("Use a URL that starts with wss:// or ws://.");
+          return;
+        }
+        if (!authorized.checked) {
+          showMessage("Authorization confirmation is required before scanning.");
+          return;
+        }
+
+        setBusy(true);
+        try {
+          const response = await fetch("/api/scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url,
+              authorized: authorized.checked,
+              verifyTls: verifyTls.checked,
+              idleSeconds: Number(idleSeconds.value || 10)
+            })
+          });
+          const payload = await response.json();
+          if (!response.ok || payload.error) {
+            throw new Error(payload.error || "Scan failed.");
+          }
+          renderSummary(payload.summary, payload.durationSeconds);
+          renderResults(payload.results);
+          renderExcluded(payload.excluded);
+        } catch (error) {
+          showMessage(error.message || String(error));
+        } finally {
+          setBusy(false);
+        }
+      });
+
+      function setBusy(isBusy) {
+        button.disabled = isBusy;
+        button.textContent = isBusy ? "Scanning" : "Start Scan";
+        statusLine.classList.toggle("active", isBusy);
+      }
+
+      function showMessage(text) {
+        message.textContent = text;
+        message.classList.add("active");
+      }
+
+      function clearMessage() {
+        message.textContent = "";
+        message.classList.remove("active");
+      }
+
+      function renderSummary(data, durationSeconds) {
+        const order = ["fail", "warning", "pass", "info", "error"];
+        summary.innerHTML = order.map((key) => {
+          const value = data && data[key] ? data[key] : 0;
+          return `<div class="metric"><strong>${value}</strong><span>${labels[key]}</span></div>`;
+        }).join("");
+        summary.insertAdjacentHTML("beforeend", `<div class="metric"><strong>${durationSeconds || 0}s</strong><span>Duration</span></div>`);
+        summary.classList.add("active");
+      }
+
+      function renderResults(items) {
+        results.innerHTML = items.map((item, index) => {
+          const status = item.status || "info";
+          const evidence = Array.isArray(item.evidence) && item.evidence.length
+            ? `<ul>${item.evidence.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`
+            : "";
+          const remediation = item.remediation
+            ? `<div class="remediation"><strong>Remediation:</strong> ${escapeHtml(item.remediation)}</div>`
+            : "";
+          return `
+            <article class="result ${status}" data-index="${index}">
+              <button class="result-head" type="button" aria-expanded="false">
+                <span class="badge ${status}">${labels[status] || status}</span>
+                <span class="result-title">
+                  <strong>${escapeHtml(item.id)} - ${escapeHtml(item.title)}</strong>
+                  <span>${escapeHtml(item.category)} - ${escapeHtml(item.summary)}</span>
+                </span>
+                <span class="severity">Severity: ${escapeHtml(item.severity || "info")} - ${item.durationMs || 0} ms</span>
+              </button>
+              <div class="result-body">
+                <p class="summary-text">${escapeHtml(item.summary)}</p>
+                ${evidence}
+                ${remediation}
+              </div>
+            </article>
+          `;
+        }).join("");
+
+        results.querySelectorAll(".result-head").forEach((head) => {
+          head.addEventListener("click", () => {
+            const parent = head.closest(".result");
+            const isOpen = parent.classList.toggle("open");
+            head.setAttribute("aria-expanded", String(isOpen));
+          });
+        });
+      }
+
+      function renderExcluded(items) {
+        if (!Array.isArray(items) || !items.length) {
+          return;
+        }
+        excluded.innerHTML = `
+          <h2>Manual-only checks</h2>
+          <ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        `;
+        excluded.classList.add("active");
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+    </script>
+  </body>
+</html>
